@@ -62,3 +62,8 @@ app.include_router(workflow_router)
 @app.get("/health")
 async def health_check():
     return {"status": "healthy"}
+
+
+@app.get("/hello")
+async def hello():
+    return {"message": "Hello from CI/CD pipeline! This was auto-deployed."}

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SSE Test</title>
+    <style>
+        body { font-family: monospace; padding: 20px; background: #1e1e1e; color: #d4d4d4; }
+        #log { border: 1px solid #444; padding: 10px; min-height: 200px; white-space: pre-wrap; }
+        button { padding: 8px 16px; margin: 5px; cursor: pointer; }
+        input { padding: 8px; width: 300px; background: #333; color: #fff; border: 1px solid #555; }
+        .status { color: #9cdcfe; }
+        .result { color: #4ec9b0; }
+        .error { color: #f44747; }
+    </style>
+</head>
+<body>
+    <h2>CrewAI SSE Test</h2>
+    <input id="topic" type="text" value="artificial intelligence" placeholder="Enter topic..." />
+    <button onclick="startStream()">Run Stream</button>
+    <button onclick="clearLog()">Clear</button>
+    <div id="log"></div>
+
+    <script>
+        function log(msg, cls) {
+            const el = document.getElementById('log');
+            const line = document.createElement('div');
+            if (cls) line.className = cls;
+            line.textContent = new Date().toISOString().slice(11, 19) + ' | ' + msg;
+            el.appendChild(line);
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+
+        function startStream() {
+            const topic = document.getElementById('topic').value;
+            clearLog();
+            log('Sending request for topic: ' + topic);
+
+            fetch('http://localhost:8000/workflow/run/stream', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ topic: topic })
+            }).then(response => {
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                function read() {
+                    reader.read().then(({ done, value }) => {
+                        if (done) {
+                            log('Stream ended.', 'status');
+                            return;
+                        }
+                        const text = decoder.decode(value);
+                        const lines = text.split('\n').filter(l => l.startsWith('data:'));
+                        lines.forEach(line => {
+                            const json = line.replace('data: ', '').trim();
+                            try {
+                                const data = JSON.parse(json);
+                                if (data.status === 'started') log('[STARTED] ' + data.message, 'status');
+                                else if (data.status === 'completed') log('[DONE] ' + data.result, 'result');
+                                else if (data.status === 'error') log('[ERROR] ' + data.message, 'error');
+                                else log(json);
+                            } catch {
+                                log(json);
+                            }
+                        });
+                        read();
+                    });
+                }
+                read();
+            }).catch(err => log('Fetch error: ' + err, 'error'));
+        }
+    </script>
+</body>
+</html>
